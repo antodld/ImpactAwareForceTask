@@ -31,7 +31,7 @@ ImpactAwareForceTask::ImpactAwareForceTask(const mc_rbdyn::RobotFrame & frame, d
 : AdmittanceTask(frame,0,weight)
 {
 
-
+  rIndex_ = frame.robot().robotIndex();
   type_ = "impact_aware_force";
   name_ = "impact_aware_force_" + robots.robot(rIndex_).name();
   reset();
@@ -39,7 +39,14 @@ ImpactAwareForceTask::ImpactAwareForceTask(const mc_rbdyn::RobotFrame & frame, d
 
 void ImpactAwareForceTask::load(mc_solver::QPSolver & solver, const mc_rtc::Configuration & config)
 {
-  TrajectoryBase::load(solver, config);
+  AdmittanceTask::load(solver, config);
+
+  mu_ = config("mu",1);
+  n_ = config("n",2);
+  m_ = config("m",1);
+  weight(config("weight",1000));
+  refVel_ = Eigen::Vector6d::Zero();
+ 
 
 }
 
@@ -47,26 +54,45 @@ void ImpactAwareForceTask::update(mc_solver::QPSolver & s)
 {
     const mc_rbdyn::Robot & robot = frame_->robot();
 
+    const Eigen::VectorXd velError = (sva::PTransformd(frame_->position().rotation()) * frame_->velocity()).vector() - refVel_;
+
+    if(frame_->hasForceSensor())
+    {
+      measuredWrench_ = frame_->wrench();
+    }
+
+    for(size_t i = 0 ; i < damping_.rows() ; i++)
+    {
+      damping_(i) = (mu_ /m_)* std::pow(std::abs(velError(i)),n_-1);
+    }
+    // damping( (mu_ /m_)* std::pow(velError.norm(),n_-1));
+    refAccel(sva::MotionVecd((measuredWrench_).vector())/m_);
+
 
 }
 
 void ImpactAwareForceTask::addToLogger(mc_rtc::Logger & logger)
 {
-  TrajectoryBase::addToLogger(logger);
+  AdmittanceTask::addToLogger(logger);
 
 }
 
 void ImpactAwareForceTask::addToGUI(mc_rtc::gui::StateBuilder & gui)
 {
-  TrajectoryBase::addToGUI(gui);
-                                                                  
+  AdmittanceTask::addToGUI(gui);
+  gui.addElement({"Tasks",name_,"Gains"}, 
+    mc_rtc::gui::NumberInput("mu",[this]()-> const double {return mu_;},[this]( double s){mu_ =s;}),
+    mc_rtc::gui::NumberInput("m",[this]()-> const double {return m_;},[this]( double s){m_ =s;}),
+    mc_rtc::gui::NumberInput("n",[this]()-> const double {return n_;},[this]( double s){n_ =s;})
+    );                                                                  
 
 }
 
 void ImpactAwareForceTask::removeFromGUI(mc_rtc::gui::StateBuilder & gui)
 {
-  TrajectoryBase::removeFromGUI(gui);
+  AdmittanceTask::removeFromGUI(gui);
   gui.removeCategory({"Task",name_});
+
 }
 
 

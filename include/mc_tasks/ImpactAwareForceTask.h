@@ -29,6 +29,7 @@ public:
 
     void reset() override
     {
+        AdmittanceTask::reset();
     }
 
     /*! \brief Load parameters from a Configuration object */
@@ -63,7 +64,10 @@ private:
 
     double weight_ = 0;
 
-    double omega_ = 3;
+    double mu_ = 1;
+    double m_ = 1;
+    Eigen::VectorXd velGain_;
+    double n_ = 1.5;
 
 
 };
